@@ -24,3 +24,4 @@ old
 tmp/
 .xslt_mal_history
 zig-cache/
+.idea
