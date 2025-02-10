@@ -1,2 +1,3 @@
 #!/bin/bash
-exec $(dirname $0)/${STEP:-stepA_mal} "${@}"
+echo "Running: $(dirname $0)/${STEP:-stepA_mal}"
+exec $(dirname $0)/build/${STEP:-stepA_mal} "${@}"
