@@ -1,5 +1,7 @@
 #include <string>
 #include <utility>
+
+#include "error.h"
 #include "iostream"
 #include "reader.h"
 #include "types.h"
@@ -24,10 +26,12 @@ int main(){
         if (!std::getline(std::cin, input)) {
             std::cout << std::endl;
             break;
+        }try {
+            std::cout << PRINT(EVAL(READ(input))) << std::endl;
+        }catch(const syntaxError& e) {
+            std::cout << e.what() << std::endl;
         }
-        std::cout << PRINT(EVAL(READ(input))) << std::endl;
     }
 
     return 0;
 }
-
