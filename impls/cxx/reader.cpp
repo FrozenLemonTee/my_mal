@@ -1,7 +1,7 @@
 #include "reader.h"
-
+#include "error.h"
 #include <utility>
-#include <bits/regex.h>
+#include <regex>
 
 auto Reader::tokenize(std::string input) -> std::vector<std::string> {
     std::vector<std::string> tokens;
@@ -9,7 +9,13 @@ auto Reader::tokenize(std::string input) -> std::vector<std::string> {
     const std::sregex_iterator it_begin(input.begin(), input.end(), tokens_pattern);
     const std::sregex_iterator it_end{};
     for (auto it = it_begin; it != it_end; ++it) {
-        tokens.emplace_back(it->str());
+        std::string token = it->str();
+        token.erase(0, token.find_first_not_of(" \t\n\r,"));
+        token.erase(token.find_last_not_of(" \t\n\r,") + 1);
+
+        if (!token.empty()) {
+            tokens.emplace_back(token);
+        }
     }
     return tokens;
 }
@@ -21,29 +27,79 @@ auto Reader::read_str(std::string input) -> MalType* {
 }
 
 auto Reader::read_form(Reader &reader) -> MalType* {
-    const std::string token = reader.next();
-    if (token == "(") {
-        return read_list(reader);
+    if (reader.hasNext()) {
+        const std::string token = reader.peek();
+        if (token == "(" || token == "[") {
+            return read_struct(reader, token == "(" ? ")" : "]");
+        }
+        if (token == "{") {
+            return read_struct(reader, "}");
+        }
+    }else {
+        return new MalNil();
     }
 
     return read_atom(reader);
 }
 
-auto Reader::read_list(Reader &reader) -> MalList* {
-    std::vector<MalType*> list;
-    while (reader.hasNext()) {
-        if (std::string token = reader.peek(); token == ")") {
+auto Reader::read_struct(Reader &reader, const std::string& type) -> MalStruct* {
+    std::string token;
+
+    if (!reader.hasNext()) {
+        throw syntaxError("unbalanced");
+    }
+
+    if (reader.peek() == "(" || reader.peek() == "[") {
+        std::vector<MalType*> list;
+        while (reader.hasNext()) {
             reader.next();
-            break;
+            token = reader.peek();
+            if (token == type) {
+                break;
+            }
+            list.emplace_back(read_form(reader));
         }
 
-        list.emplace_back(read_form(reader));
+        if (token == ")") {
+            return new MalList(list);
+        }
+        if (token == "]") {
+            return new MalVector(list);
+        }
+
+    } else if (reader.peek() == "{") {
+        std::map<MalType*, MalType*> map;
+        MalType* key = nullptr;
+        MalType* value = nullptr;
+
+        while (reader.hasNext()) {
+            reader.next();
+            token = reader.peek();
+
+            if (token == "}") {
+                break;
+            }
+
+            if (key == nullptr) {
+                key = read_form(reader);
+            } else {
+                value = read_form(reader);
+                map.insert({key, value});
+                key = nullptr;
+            }
+        }
+
+        if (key != nullptr)
+            throw syntaxError("unbalanced");
+
+        return new MalMap(map);
     }
-    return new MalList(list);
+
+    throw syntaxError("unbalanced");
 }
 
-auto Reader::read_atom(Reader &reader) -> MalAtom* {
-    const auto token = reader.next();
+auto Reader::read_atom(const Reader &reader) -> MalAtom* {
+    const auto token = reader.peek();
     if (MalType::isInt(token)) {
         return new MalInt(std::stoll(token));
     }
@@ -53,9 +109,10 @@ auto Reader::read_atom(Reader &reader) -> MalAtom* {
     if (MalType::isBool(token)) {
         return new MalBool(token == "true");
     }
-    if (MalType::isChar(token)) {
-        new MalChar(token[0]);
-    }
+    if (MalType::isString(token))
+        return new MalString(token);
+    if (MalType::isKeyword(token))
+        return new MalKeyword(token.substr(1));
 
     return new MalSymbol(token);
 }
