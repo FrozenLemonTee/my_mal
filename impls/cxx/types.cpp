@@ -37,7 +37,7 @@ auto MalType::isString(const std::string &token) -> bool {
                 (content[i + 1] != 'n' && content[i + 1] != 't' && content[i + 1] != '\\' &&
                  content[i + 1] != '\"' && content[i + 1] != 'r')) {
                 return false;
-                 }
+            }
             ++i;
         }
     }
@@ -78,7 +78,7 @@ auto MalSymbol::to_string() -> std::string {
 }
 
 MalList::MalList(std::vector<MalType*> elements)
-    : elements_(std::move(elements)) {}
+        : elements_(std::move(elements)) {}
 
 auto MalList::to_string() -> std::string {
     std::stringstream ss;
@@ -100,6 +100,9 @@ MalList::~MalList() {
         delete e;
     }
 }
+
+MalList::MalList(std::initializer_list<MalType *> elements)
+    : elements_(elements) {}
 
 MalVector::MalVector(std::vector<MalType *> elements)
     : elements_(std::move(elements)) {}
@@ -126,7 +129,7 @@ MalVector::~MalVector() {
 }
 
 MalKeyword::MalKeyword(std::string name)
-    : name_(std::move(name)) {}
+        : name_(std::move(name)) {}
 
 auto MalKeyword::to_string() -> std::string {
     return ":" + this->name_;
@@ -134,7 +137,7 @@ auto MalKeyword::to_string() -> std::string {
 
 
 MalMap::MalMap(const std::map<MalType*, MalType*>& elements)
-    : elements_(elements) {}
+        : elements_(elements) {}
 
 auto MalMap::to_string() -> std::string {
     std::stringstream ss;
@@ -215,6 +218,39 @@ MalUnQuoteSplicing::MalUnQuoteSplicing(MalType *expr) : MalSyntaxQuote(expr) {}
 
 std::string MalUnQuoteSplicing::to_string() {
     std::stringstream ss;
-    ss << "(unquote-splicing " << this->expr_->to_string() << ")";
+    ss << "(splice-unquote " << this->expr_->to_string() << ")";
     return ss.str();
 }
+
+MalDeref::MalDeref(MalType *expr) : MalSyntaxQuote(expr) {}
+
+std::string MalDeref::to_string() {
+    std::stringstream ss;
+    ss << "(deref " << this->expr_->to_string() << ")";
+    return ss.str();
+}
+
+MalMetaSymbol::MalMetaSymbol(MalType *meta, MalType *value)
+    : MalSyntaxQuote(nullptr), meta_(meta), value_(value) {}
+
+MalType *MalMetaSymbol::get_meta() const {
+    return this->meta_;
+}
+
+MalType *MalMetaSymbol::get_value() const {
+    return this->value_;
+}
+
+std::string MalMetaSymbol::to_string() {
+    std::stringstream ss;
+    ss << "(with-meta " << this->value_->to_string();
+    ss << " " << this->meta_->to_string() << ")";
+    return ss.str();
+}
+
+MalMetaSymbol::~MalMetaSymbol() {
+    delete this->meta_;
+    delete this->value_;
+}
+
+
