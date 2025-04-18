@@ -3,12 +3,21 @@
 #include <stdexcept>
 
 class syntaxError : public std::runtime_error {
-        std::string msg;
-    public:
-        explicit syntaxError(const std::string& arg);
+    std::string msg;
+public:
+    explicit syntaxError(const std::string& arg);
 };
 
-inline syntaxError::syntaxError(const std::string &arg)
-    : runtime_error(arg) {}
+class typeError : public std::runtime_error {
+    std::string msg;
+public:
+    explicit typeError(const std::string& arg);
+};
+
+class valueError : public std::runtime_error {
+    std::string msg;
+public:
+    explicit valueError(const std::string& arg);
+};
 
 #endif //ERROR_H
