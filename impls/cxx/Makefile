@@ -12,7 +12,7 @@ SRCS = $(wildcard step*_*.cpp)
 MAX_STEP_SRC = $(shell echo $(SRCS) | tr ' ' '\n' | sort -n | tail -n 1)
 
 # 需要链接的依赖库源文件
-LIB_SRCS = printer.cpp reader.cpp types.cpp env.cpp error.cpp builtin.cpp
+LIB_SRCS = printer.cpp reader.cpp types.cpp env.cpp error.cpp builtin.cpp evaluator.cpp
 
 # 所有源文件（包括依赖库的源文件）
 ALL_SRCS = $(MAX_STEP_SRC) $(LIB_SRCS)
