@@ -1,4 +1,5 @@
 #include "env.h"
+#include <ranges>
 #include "builtin.h"
 #include "error.h"
 
@@ -8,7 +9,10 @@ void Env::builtin_register() {
     this->add("-", new MalFunction(operator_minus));
     this->add("*", new MalFunction(operator_multiply));
     this->add("/", new MalFunction(operator_divide));
+    this->add("str", new MalFunction(str));
+    this->add("pr-str", new MalFunction(pr_str));
     this->add("prn", new MalFunction(prn));
+    this->add("println", new MalFunction(println));
     this->add("list", new MalFunction(list));
     this->add("list?", new MalFunction(is_list));
     this->add("empty?", new MalFunction(is_empty));
@@ -18,10 +22,11 @@ void Env::builtin_register() {
     this->add("<=", new MalFunction(less_equal));
     this->add(">", new MalFunction(greater));
     this->add(">=", new MalFunction(greater_equal));
+    this->add("not", new MalFunction(not_func));
 }
 
-Env::Env(Env *host, bool is_global)
-    : symbols(), global_(is_global), host_env(host) {
+Env::Env(Env *host, const bool is_global)
+    : global_(is_global), host_env(host) {
     if (this->global_){
         this->builtin_register();
     }
@@ -34,10 +39,9 @@ void Env::add(const std::string& name, MalType *symbol) {
 MalType *Env::get(const std::string &name) {
     if (this->symbols.contains(name))
         return this->symbols[name];
-    else if (this->host_env != nullptr)
+    if (this->host_env != nullptr)
         return this->host_env->get(name);
-    else
-        return nullptr;
+    return nullptr;
 }
 
 void Env::set(const std::string &name, MalType *symbol) {
@@ -45,7 +49,7 @@ void Env::set(const std::string &name, MalType *symbol) {
 }
 
 Env::~Env() {
-    for (auto& [name, symbol]: this->symbols) {
+    for (const auto &symbol: this->symbols | std::views::values) {
         delete symbol;
     }
 }
@@ -60,7 +64,7 @@ Env* Env::find(const std::string &name) {
 }
 
 Env* Env::clone() const {
-    Env* cloned_env = new Env(this->host_env, this->global_);
+    const auto cloned_env = new Env(this->host_env, this->global_);
     for (const auto& [name, symbol]: this->symbols){
         cloned_env->add(name, symbol->clone());
     }
@@ -69,13 +73,32 @@ Env* Env::clone() const {
 
 Env::Env(Env *host, const std::vector<std::string> &args_list,
          MalFunction::mal_func_args_list_type &params_list) : Env(host, false) {
-    if (args_list.size() != params_list.size()){
-        throw argInvalidError("expected" + std::to_string(args_list.size()) + " arg(s), given "
-                              + std::to_string(params_list.size()) + "arg(s)");
-    }
-    auto it_args = args_list.begin();
-    auto it_params = params_list.begin();
-    for (;it_args != args_list.end() && it_params != params_list.end(); it_args++, it_params++){
-        this->add(*it_args, *it_params);
+    if (const auto it = std::ranges::find(args_list, "&"); it != args_list.end()) {
+        if (std::distance(it, args_list.end()) != 2) {
+            throw syntaxError("malfunctioning & param usage");
+        }
+
+        const std::size_t fixed_arity = std::distance(args_list.begin(), it);
+        if (params_list.size() < fixed_arity) {
+            throw argInvalidError("too few arguments");
+        }
+
+        for (std::size_t i = 0; i < fixed_arity; ++i) {
+            this->set(args_list[i], params_list[i]);
+        }
+
+        const auto rest_begin = std::next(params_list.begin(), static_cast<std::vector<MalType*>::difference_type>(fixed_arity));
+        const std::vector<MalType*> rest{rest_begin, params_list.end()};
+        this->set(*(it + 1), new MalList(rest));
+    } else {
+        if (args_list.size() != params_list.size()) {
+            throw argInvalidError("expected " + std::to_string(args_list.size()) +
+                                  " arg(s), given " + std::to_string(params_list.size()) + " arg(s)");
+        }
+
+        auto it_args = args_list.begin();
+        for (auto it_params = params_list.begin(); it_args != args_list.end(); ++it_args, ++it_params) {
+            this->add(*it_args, *it_params);
+        }
     }
 }

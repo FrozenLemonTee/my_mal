@@ -109,7 +109,13 @@ bool MalInt::equal(const MalType *type) const {
     return other_int && this->val_ == other_int->val_;
 }
 
-MalString::MalString(const std::string& val) : val_(std::move(val.substr(1, val.length() - 2))) {}
+MalString::MalString(const std::string& val) {
+    if (val.length() >= 2 && val.front() == '"' && val.back() == '"') {
+        val_ = val.substr(1, val.length() - 2);
+    } else {
+        val_ = val;
+    }
+}
 
 auto MalString::to_string() const -> std::string {
     return "\"" + val_ + "\"";
@@ -491,7 +497,7 @@ MalMetaSymbol *MalMetaSymbol::clone() const {
 }
 
 bool MalMetaSymbol::equal(const MalType *type) const {
-    auto other_meta_symbol = dynamic_cast<const MalMetaSymbol*>(type);
+    const auto other_meta_symbol = dynamic_cast<const MalMetaSymbol*>(type);
     return other_meta_symbol &&
            this->meta_->equal(other_meta_symbol->meta_) &&
            this->value_->equal(other_meta_symbol->value_);
@@ -499,25 +505,27 @@ bool MalMetaSymbol::equal(const MalType *type) const {
 
 
 MalFunction::MalFunction(std::function<mal_func_type> fn)
-    : func_(std::move(fn)), is_builtin(true), params_list(nullptr), body_(nullptr), env_(nullptr) {}
+    : func_(std::move(fn)), is_builtin(true), args_list(nullptr), body_(nullptr), env_(nullptr) {}
 
-MalFunction::MalFunction(MalList *params, MalType *body, Env &env)
-    : func_(), is_builtin(false), params_list(params), body_(body), env_(&env) {}
+MalFunction::MalFunction(MalList *args, MalType *body, Env* env)
+    : is_builtin(false), args_list(args), body_(body), env_(env) {}
 
-MalType *MalFunction::operator()(mal_func_args_list_type& args) const {
+MalType *MalFunction::operator()(mal_func_args_list_type& params) const {
     if (this->is_builtin){
-        return this->func_(args);
+        return this->func_(params);
     }
-    std::vector<std::string> param_names;
-    for (MalType* param : this->params_list->get_elem()) {
-        auto sym = dynamic_cast<MalSymbol*>(param);
+    const auto& args_list_elems = this->args_list->get_elem();
+    const auto size = args_list_elems.size();
+    std::vector<std::string> args_names(size);
+    for (std::size_t i = 0; i < size; ++i) {
+        const auto sym = dynamic_cast<MalSymbol*>(args_list_elems[i]);
         if (!sym) {
             throw typeError("fn* parameters must be symbols");
         }
-        param_names.push_back(sym->name());
+        args_names[i] = sym->name();
     }
-    Env local_env(this->env_, false);
-    return Evaluator::eval(this->body_, local_env);
+    const auto local_env = new Env(this->env_, args_names, params);
+    return Evaluator::eval(this->body_, *local_env);
 }
 
 MalType *MalFunction::apply(mal_func_args_list_type& args) const {
@@ -548,7 +556,7 @@ MalType *MalPair::value() const {
 }
 
 bool MalPair::equal(const MalType *other) const {
-    auto other_pair = dynamic_cast<const MalPair*>(other);
+    const auto other_pair = dynamic_cast<const MalPair*>(other);
     return other_pair &&
            this->key()->equal(other_pair->key()) &&
            this->value()->equal(other_pair->value());
