@@ -1,8 +1,6 @@
 #include <iostream>
 #include "builtin.h"
-
 #include <sstream>
-
 #include "printer.h"
 #include "error.h"
 
@@ -80,41 +78,57 @@ MalType* operator_divide(const std::vector<MalType *> &args) {
 }
 
 MalType* str(const std::vector<MalType *>& args) {
+    const auto args_str = print_helper(args, false);
     std::stringstream ss;
-    for (const auto& object: args){
-        if (const auto str = dynamic_cast<MalString*>(object); !str) {
-            ss << Printer::pr_str(object);
-        } else {
-            ss << str->get_elem();
-        }
+    for (const auto& s: args_str){
+        ss << s;
     }
     return new MalString(ss.str());
 }
 
 MalType* pr_str(const std::vector<MalType *>& args) {
+    const auto args_str = print_helper(args, true);
     std::stringstream ss;
     bool first = true;
-    for (const auto& object: args){
+    for (const auto& s: args_str){
         if (!first) {
             ss << " ";
         }
-        ss << Printer::pr_str(object);
+        ss << s;
         first = false;
     }
     return new MalString(ss.str());
 }
 
 MalType* prn(const std::vector<MalType*>& args) {
-    const auto returned = pr_str(args);
-    std::cout << dynamic_cast<MalString*>(returned)->get_elem();
-    delete returned;
+    const auto args_str = print_helper(args, true);
+    std::stringstream ss;
+    bool first = true;
+    for (const auto& s: args_str){
+        if (!first) {
+            ss << " ";
+        }
+        ss << s;
+        first = false;
+    }
+    ss << "\n";
+    std::cout << ss.str();
     return new MalNil;
 }
 
 MalType* println(const std::vector<MalType *>& args) {
-    const auto returned = str(args);
-    std::cout << dynamic_cast<MalString*>(returned)->get_elem() << std::endl;
-    delete returned;
+    const auto args_str = print_helper(args, false);
+    std::stringstream ss;
+    bool first = true;
+    for (const auto& s: args_str){
+        if (!first) {
+            ss << " ";
+        }
+        ss << s;
+        first = false;
+    }
+    ss << "\n";
+    std::cout << ss.str();
     return new MalNil;
 }
 
@@ -136,7 +150,7 @@ MalType* is_empty(const std::vector<MalType*>& args) {
         return new MalBool(false);
     }
 
-    const auto arg = dynamic_cast<MalList*>(args[0]);
+    const auto arg = dynamic_cast<MalSequence*>(args[0]);
     return new MalBool(arg && arg->get_elem().empty());
 }
 
@@ -209,4 +223,14 @@ MalType* compare_ints(const std::vector<MalType *> &args, const std::function<bo
         throw argInvalidError("wrong type");
     }
     return new MalBool(cmp(lhs->get_elem(), rhs->get_elem()));
+}
+
+std::vector<std::string> print_helper(const std::vector<MalType*>& args, const bool print_readably)
+{
+    std::vector<std::string> res;
+    for (const auto& arg: args)
+    {
+        res.emplace_back(Printer::pr_str(arg, print_readably));
+    }
+    return res;
 }

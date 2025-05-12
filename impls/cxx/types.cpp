@@ -52,8 +52,8 @@ MalType::~MalType() {
     delete this->meta_;
 }
 
-auto MalNil::to_string() const -> std::string {
-    return "nil";
+auto MalNil::to_string(const bool) const -> std::string {
+    return this->printable ? "nil" : "";
 }
 
 MalNil *MalNil::clone() const {
@@ -64,7 +64,7 @@ std::nullptr_t& MalNil::get_elem() {
     return this->val_;
 }
 
-MalNil::MalNil(std::nullptr_t val) : val_(val) {}
+MalNil::MalNil(const bool printable, const std::nullptr_t val) : val_(val), printable(printable) {}
 
 bool MalNil::equal(const MalType* type) const {
     auto other_nil = dynamic_cast<const MalNil*>(type);
@@ -73,7 +73,7 @@ bool MalNil::equal(const MalType* type) const {
 
 MalBool::MalBool(const bool val) : val_(val) {}
 
-auto MalBool::to_string() const -> std::string {
+auto MalBool::to_string(const bool) const -> std::string {
     return val_ ? "true" : "false";
 }
 
@@ -92,7 +92,7 @@ bool MalBool::equal(const MalType *type) const {
 
 MalInt::MalInt(const int64_t val) : val_(val) {}
 
-auto MalInt::to_string() const -> std::string {
+auto MalInt::to_string(const bool) const -> std::string {
     return std::to_string(this->val_);
 }
 
@@ -117,8 +117,25 @@ MalString::MalString(const std::string& val) {
     }
 }
 
-auto MalString::to_string() const -> std::string {
-    return "\"" + val_ + "\"";
+auto MalString::to_string(const bool print_readably) const -> std::string {
+    if (!print_readably)
+        return this->val_;
+
+    std::stringstream ss;
+    ss << "\"";
+    for (const auto& ch: this->val_)
+    {
+        switch (ch)
+        {
+            case '\n': ss << "\\n"; break;
+            case '\t': ss << "\\t"; break;
+            case '\r': ss << "\\r"; break;
+            case '"': ss << "\\\""; break;
+            default: ss << ch;
+        }
+    }
+    ss << "\"";
+    return ss.str();
 }
 
 MalString *MalString::clone() const {
@@ -136,7 +153,7 @@ bool MalString::equal(const MalType *type) const {
 
 MalSymbol::MalSymbol(std::string name) : name_(std::move(name)) {}
 
-auto MalSymbol::to_string() const -> std::string {
+auto MalSymbol::to_string(const bool) const -> std::string {
     return name_;
 }
 
@@ -159,18 +176,33 @@ MalSequence::MalSequence(std::vector<MalType *> elements)
 MalSequence::MalSequence(std::initializer_list<MalType *> elements)
     : elements_(elements) {}
 
+bool MalSequence::equal(const MalType* type) const
+{
+    auto other_sequence = dynamic_cast<const MalSequence*>(type);
+    if (!other_sequence){
+        return false;
+    }
+    std::size_t i;
+    for (i = 0; i < this->elements_.size() && i < other_sequence->elements_.size(); ++i) {
+        if (!this->elements_[i]->equal(other_sequence->elements_[i])){
+            return false;
+        }
+    }
+    return i == this->elements_.size() && i == other_sequence->elements_.size();
+}
+
 std::vector<MalType *> &MalSequence::get_elem() {
     return this->elements_;
 }
 
-std::string MalSequence::to_string() const {
+std::string MalSequence::to_string(const bool print_readably) const {
     std::stringstream ss;
     bool first = true;
     for (const auto& element : this->elements_) {
         if (!first) {
             ss << " ";
         }
-        ss << element->to_string();
+        ss << element->to_string(print_readably);
         first = false;
     }
     return ss.str();
@@ -193,10 +225,10 @@ std::vector<MalType *> MalSequence::elem_clone() const {
 MalList::MalList(std::vector<MalType*> elements)
         : MalSequence(std::move(elements)) {}
 
-auto MalList::to_string() const -> std::string {
+auto MalList::to_string(const bool print_readably) const -> std::string {
     std::stringstream ss;
     ss << "(";
-    ss << MalSequence::to_string();
+    ss << MalSequence::to_string(print_readably);
     ss << ")";
     return ss.str();
 }
@@ -208,27 +240,13 @@ MalList *MalList::clone() const {
     return new MalList(this->elem_clone());
 }
 
-bool MalList::equal(const MalType *type) const {
-    auto other_list = dynamic_cast<const MalList*>(type);
-    if (!other_list){
-        return false;
-    }
-    std::size_t i;
-    for (i = 0; i < this->elements_.size() && i < other_list->elements_.size(); ++i) {
-        if (!this->elements_[i]->equal(other_list->elements_[i])){
-            return false;
-        }
-    }
-    return i == this->elements_.size() && i == other_list->elements_.size();
-}
-
 MalVector::MalVector(std::vector<MalType *> elements)
     : MalSequence(std::move(elements)) {}
 
-auto MalVector::to_string() const -> std::string {
+auto MalVector::to_string(const bool print_readably) const -> std::string {
     std::stringstream ss;
     ss << "[";
-    ss << MalSequence::to_string();
+    ss << MalSequence::to_string(print_readably);
     ss << "]";
     return ss.str();
 }
@@ -240,24 +258,10 @@ MalVector *MalVector::clone() const {
 MalVector::MalVector(std::initializer_list<MalType *> elements)
     : MalSequence(elements) {}
 
-bool MalVector::equal(const MalType *type) const {
-    auto other_vector = dynamic_cast<const MalVector*>(type);
-    if (!other_vector){
-        return false;
-    }
-    std::size_t i;
-    for (i = 0; i < this->elements_.size() && i < other_vector->elements_.size(); ++i) {
-        if (!this->elements_[i]->equal(other_vector->elements_[i])){
-            return false;
-        }
-    }
-    return i == this->elements_.size() && i == other_vector->elements_.size();
-}
-
 MalKeyword::MalKeyword(std::string name)
         : name_(std::move(name)) {}
 
-auto MalKeyword::to_string() const -> std::string {
+auto MalKeyword::to_string(const bool) const -> std::string {
     return ":" + this->name_;
 }
 
@@ -278,7 +282,7 @@ bool MalKeyword::equal(const MalType *type) const {
 MalMap::MalMap(const std::set<MalPair*>& elements)
         : elements_(elements) {}
 
-auto MalMap::to_string() const -> std::string {
+auto MalMap::to_string(const bool print_readably) const -> std::string {
     std::stringstream ss;
     ss << "{";
     bool first = true;
@@ -286,7 +290,7 @@ auto MalMap::to_string() const -> std::string {
         if (!first) {
             ss << " ";
         }
-        ss << e->to_string();
+        ss << e->to_string(print_readably);
         first = false;
     }
     ss << "}";
@@ -344,7 +348,7 @@ MalType *MalMap::get(MalType *key) const {
 void MalMap::put(MalType *key, MalType *value) {
     for (const auto& pair : this->elements_) {
         if (pair->key()->equal(key)) {
-            const_cast<MalPair*>(pair)->setValue(value);
+            pair->setValue(value);
             return;
         }
     }
@@ -357,7 +361,7 @@ MalMetaData::~MalMetaData() {
     delete this->data_;
 }
 
-std::string MalMetaData::to_string() const {
+std::string MalMetaData::to_string(const bool) const {
     return std::string(); // todo
 }
 
@@ -391,9 +395,9 @@ MalSyntaxQuote::~MalSyntaxQuote() {
 
 MalQuote::MalQuote(MalType *expr) : MalSyntaxQuote(expr) {}
 
-std::string MalQuote::to_string() const {
+std::string MalQuote::to_string(const bool print_readably) const {
     std::stringstream ss;
-    ss << "(quote " << this->expr_->to_string() << ")";
+    ss << "(quote " << this->expr_->to_string(print_readably) << ")";
     return ss.str();
 }
 
@@ -407,9 +411,9 @@ bool MalQuote::equal(const MalType *type) const {
 
 MalQuasiQuote::MalQuasiQuote(MalType *expr) : MalSyntaxQuote(expr) {}
 
-std::string MalQuasiQuote::to_string() const {
+std::string MalQuasiQuote::to_string(const bool print_readably) const {
     std::stringstream ss;
-    ss << "(quasiquote " << this->expr_->to_string() << ")";
+    ss << "(quasiquote " << this->expr_->to_string(print_readably) << ")";
     return ss.str();
 }
 
@@ -423,9 +427,9 @@ bool MalQuasiQuote::equal(const MalType *type) const {
 
 MalUnQuote::MalUnQuote(MalType *expr) : MalSyntaxQuote(expr) {}
 
-std::string MalUnQuote::to_string() const {
+std::string MalUnQuote::to_string(const bool print_readably) const {
     std::stringstream ss;
-    ss << "(unquote " << this->expr_->to_string() << ")";
+    ss << "(unquote " << this->expr_->to_string(print_readably) << ")";
     return ss.str();
 }
 
@@ -439,9 +443,9 @@ bool MalUnQuote::equal(const MalType *type) const {
 
 MalUnQuoteSplicing::MalUnQuoteSplicing(MalType *expr) : MalSyntaxQuote(expr) {}
 
-std::string MalUnQuoteSplicing::to_string() const {
+std::string MalUnQuoteSplicing::to_string(const bool print_readably) const {
     std::stringstream ss;
-    ss << "(splice-unquote " << this->expr_->to_string() << ")";
+    ss << "(splice-unquote " << this->expr_->to_string(print_readably) << ")";
     return ss.str();
 }
 
@@ -455,9 +459,9 @@ bool MalUnQuoteSplicing::equal(const MalType *type) const {
 
 MalDeref::MalDeref(MalType *expr) : MalSyntaxQuote(expr) {}
 
-std::string MalDeref::to_string() const {
+std::string MalDeref::to_string(const bool print_readably) const {
     std::stringstream ss;
-    ss << "(deref " << this->expr_->to_string() << ")";
+    ss << "(deref " << this->expr_->to_string(print_readably) << ")";
     return ss.str();
 }
 
@@ -480,10 +484,10 @@ MalType *MalMetaSymbol::get_value() const {
     return this->value_;
 }
 
-std::string MalMetaSymbol::to_string() const {
+std::string MalMetaSymbol::to_string(const bool print_readably) const {
     std::stringstream ss;
-    ss << "(with-meta " << this->value_->to_string();
-    ss << " " << this->meta_->to_string() << ")";
+    ss << "(with-meta " << this->value_->to_string(print_readably);
+    ss << " " << this->meta_->to_string(print_readably) << ")";
     return ss.str();
 }
 
@@ -507,7 +511,7 @@ bool MalMetaSymbol::equal(const MalType *type) const {
 MalFunction::MalFunction(std::function<mal_func_type> fn)
     : func_(std::move(fn)), is_builtin(true), args_list(nullptr), body_(nullptr), env_(nullptr) {}
 
-MalFunction::MalFunction(MalList *args, MalType *body, Env* env)
+MalFunction::MalFunction(MalSequence *args, MalType *body, Env* env)
     : is_builtin(false), args_list(args), body_(body), env_(env) {}
 
 MalType *MalFunction::operator()(mal_func_args_list_type& params) const {
@@ -536,7 +540,7 @@ MalFunction *MalFunction::clone() const {
     return new MalFunction(*this);
 }
 
-std::string MalFunction::to_string() const {
+std::string MalFunction::to_string(const bool) const {
     return "#<function>";
 }
 
@@ -566,8 +570,8 @@ MalPair* MalPair::clone() const {
     return new MalPair(this->key()->clone(), this->value()->clone());
 }
 
-std::string MalPair::to_string() const {
-    return this->key()->to_string() + " " + this->value()->to_string();
+std::string MalPair::to_string(const bool print_readably) const {
+    return this->key()->to_string(print_readably) + " " + this->value()->to_string(print_readably);
 }
 
 MalPair::~MalPair() {
