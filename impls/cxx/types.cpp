@@ -506,7 +506,6 @@ bool MalMetaSymbol::equal(const MalType *type) const {
            this->value_->equal(other_meta_symbol->value_);
 }
 
-
 MalFunction::MalFunction(std::function<mal_func_type> fn)
     : func_(std::move(fn)), is_builtin(true), args_list(nullptr), body_(nullptr), env_(nullptr) {}
 
@@ -528,7 +527,7 @@ MalType *MalFunction::operator()(mal_func_args_list_type& params) const {
         args_names[i] = sym->name();
     }
     const auto local_env = new Env(this->env_, args_names, params);
-    return Evaluator::eval(this->body_, *local_env);
+    return Evaluator::eval(this->body_, local_env);
 }
 
 MalType *MalFunction::apply(mal_func_args_list_type& args) const {
@@ -545,6 +544,22 @@ std::string MalFunction::to_string(const bool) const {
 
 bool MalFunction::equal(const MalType*) const {
     return false;
+}
+
+MalSequence* MalFunction::get_args_list() const {
+    return this->args_list;
+}
+
+MalType* MalFunction::get_body() const {
+    return this->body_;
+}
+
+Env* MalFunction::get_env() const {
+    return this->env_;
+}
+
+bool MalFunction::is_builtin_func() const {
+    return this->is_builtin;
 }
 
 MalPair::MalPair(MalType *key, MalType *value)
