@@ -4,6 +4,7 @@
 
 
 void Env::builtin_register() {
+    this->add("*ARGV*", new MalList({}));
     this->add("+", new MalFunction(operator_plus));
     this->add("-", new MalFunction(operator_minus));
     this->add("*", new MalFunction(operator_multiply));
@@ -25,7 +26,7 @@ void Env::builtin_register() {
     this->add("read-string", new MalFunction(read_string));
     this->add("slurp", new MalFunction(slurp));
     this->add("eval", new MalFunction(evals));
-    this->add("load-file", new MalFunction(load_file));
+    this->add("load-file", new MalFunction(load_file_repl));
     this->add("atom", new MalFunction(atom));
     this->add("atom?", new MalFunction(is_atom));
     this->add("deref", new MalFunction(deref));
