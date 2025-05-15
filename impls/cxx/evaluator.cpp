@@ -127,6 +127,34 @@ MalType* Evaluator::eval(MalType *input, Env* env) {
                 continue;
             }
 
+            if (first_sym && first_sym->name() == "quote"){
+                if (lst_elem.size() != 2) {
+                    throw syntaxError("expected 1 arg, but given " + std::to_string(lst_elem.size() - 1) + "arg(s)");
+                }
+                return lst_elem[1];
+            }
+
+            if (first_sym && first_sym->name() == "quasiquote"){
+                if (lst_elem.size() != 2) {
+                    throw syntaxError("expected 1 arg, but given " + std::to_string(lst_elem.size() - 1) + "arg(s)");
+                }
+                return quasiquote(lst_elem[1]);
+            }
+
+            if (first_sym && first_sym->name() == "unquote"){
+                if (lst_elem.size() != 2) {
+                    throw syntaxError("expected 1 arg, but given " + std::to_string(lst_elem.size() - 1) + "arg(s)");
+                }
+                return new MalUnQuote(lst_elem[1]);
+            }
+
+            if (first_sym && first_sym->name() == "splice-unquote"){
+                if (lst_elem.size() < 2) {
+                    throw syntaxError("expected at least 1 arg, but given " + std::to_string(lst_elem.size() - 1) + "arg(s)");
+                }
+                return new MalUnQuoteSplicing(lst_elem[1]);
+            }
+
             std::vector<MalType*> eval_params;
             for (auto& arg: lst_elem){
                 eval_params.emplace_back(eval(arg, env));
@@ -184,6 +212,10 @@ MalType* Evaluator::eval(MalType *input, Env* env) {
                     throw valueError("Cannot deref a non-atom type");
                 }
                 input = dynamic_cast<MalRef*>(res)->get();
+            } else if (dynamic_cast<MalQuote*>(syntax)){
+                return dynamic_cast<MalQuote*>(syntax)->get();
+            } else if (dynamic_cast<MalQuasiQuote*>(syntax)){
+                input = quasiquote(dynamic_cast<MalQuasiQuote*>(syntax)->get());
             }
             continue;
         }
@@ -202,4 +234,48 @@ MalType* Evaluator::eval(MalType* input) {
 
 void Evaluator::set_env(Env *env) {
     repl_env = env;
+}
+
+MalType* Evaluator::quasiquote(MalType* input) {
+    if (dynamic_cast<MalUnQuote*>(input)){
+        return dynamic_cast<MalUnQuote*>(input)->get();
+    }
+
+    auto sequence = dynamic_cast<MalSequence*>(input);
+    if (!sequence || sequence->get_elem().empty()){
+        return input;
+    }
+    if (dynamic_cast<MalList*>(sequence)){
+        auto elems = sequence->get_elem();
+        std::vector<MalType*> reversed = {elems.rbegin(), elems.rend()};
+        auto res = new MalList{};
+        for (const auto item: reversed){
+            auto splice = dynamic_cast<MalUnQuoteSplicing*>(item);
+            if (splice){
+                res = new MalList{
+                        new MalSymbol("concat"),
+                        splice->get(),
+                        res
+                };
+            } else{
+                res = new MalList{
+                        new MalSymbol("cons"),
+                        quasiquote(item),
+                        res
+                };
+            }
+        }
+        return res;
+    }
+
+    if (auto vec = dynamic_cast<MalVector*>(input)) {
+        auto processed = quasiquote(new MalList({vec->get_elem()}));
+        return new MalList{ new MalSymbol("vec"), processed };
+    }
+
+    if (dynamic_cast<MalSymbol*>(input) || dynamic_cast<MalMap*>(input)) {
+        return new MalList{ new MalSymbol("quote"), input };
+    }
+
+    return input;
 }
